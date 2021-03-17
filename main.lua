@@ -74,6 +74,14 @@ local function drawSquares()
 	for _, square in ipairs( squares ) do square:draw() end
 end
 
+local function setColor255(r,g,b,a)
+    r = r or 255
+    g = g or 255
+    b = b or 255
+    a = a or 255
+    love.graphics.setColor(r/255, g/255, b/255, a/255)
+end
+
 function love.load()
     mobileCam = Camera( W / 2 - 2 * offset, H - 2 * offset, {
             x = offset,
@@ -244,11 +252,11 @@ function love.draw()
 	love.graphics.setStencilTest( 'greater', 0 )
 	mobileCam:push() do
 		layer.far:push() do
-			love.graphics.setColor( 255, 0, 0, 25 )
+			setColor255( 255, 0, 0, 25 )
 			drawSquares()
 		end layer.far:pop()
 
-		love.graphics.setColor( 0, 255, 0, 255 )
+		setColor255( 0, 255, 0, 255 )
 		drawSquares()
         -- ## Draw the game here ##
         if show_world then
@@ -257,12 +265,12 @@ function love.draw()
 
 		-- Either method is acceptable
 		mobileCam:push( 'close' ) do
-			love.graphics.setColor( 0, 0, 255, 25 )
+			setColor255( 0, 0, 255, 25 )
 			drawSquares()
 		end mobileCam:pop( 'close' )
 	end mobileCam:pop()
 
-	love.graphics.setColor(255,255,255)
+	setColor255(255,255,255)
     local x,y = mobileCam:getScreenCoordinates(world_dimensions[1]/2,world_dimensions[2]/2)
     love.graphics.circle("line", x,y, 5,5)
     love.graphics.printf("World Center", x,y, 100, 'center')

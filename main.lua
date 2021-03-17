@@ -16,45 +16,54 @@ local function drawCameraBounds( cam, mode )
 	love.graphics.rectangle( mode, cam.x, cam.y, cam.w, cam.h )
 end
 
-local mobileCam = Camera( W / 2 - 2 * offset, H - 2 * offset, { x = offset, y = offset, resizable = true, maintainAspectRatio = true,
-	resizingFunction = function( self, w, h )
-		resizeCamera( self, w, h )
-		local W, H = love.graphics.getDimensions()
-		self.x = offset
-		self.y = offset
-	end,
-	getContainerDimensions = function()
-		local W, H = love.graphics.getDimensions()
-		return W / 2 - 2 * offset, H - 2 * offset
-	end
-} )
+local mobileCam = Camera( W / 2 - 2 * offset, H - 2 * offset, {
+		x = offset,
+		y = offset,
+		resizable = true,
+		maintainAspectRatio = true,
+		resizingFunction = function( self, w, h )
+			resizeCamera( self, w, h )
+			--~ local W, H = love.graphics.getDimensions()
+			self.x = offset
+			self.y = offset
+		end,
+		getContainerDimensions = function()
+			--~ local W, H = love.graphics.getDimensions()
+			return W / 2 - 2 * offset, H - 2 * offset
+		end,
+	} )
 
 -- Moves at the same speed as the main layer
-close = mobileCam:addLayer( 'close', 2, { relativeScale = .5 } )
-far = mobileCam:addLayer( 'far', .5 )
+local close = mobileCam:addLayer( 'close', 2, { relativeScale = .5 } )
+local far = mobileCam:addLayer( 'far', .5 )
 
-local overviewCam = Camera( W / 2 - 2 * offset, H - 2 * offset, { x = W / 2 + offset, y = offset, resizable = true, maintainAspectRatio = true,
-	resizingFunction = function( self, w, h )
-		resizeCamera( self, w, h )
-		local W, H = love.graphics.getDimensions()
-		self.x = W / 2 + offset
-		self.y = offset
-	end,
-	getContainerDimensions = function()
-		local W, H = love.graphics.getDimensions()
-		return W / 2 - 2 * offset, H - 2 * offset
-	end
-} )
+local overviewCam = Camera( W / 2 - 2 * offset,
+	H - 2 * offset,
+	{ x = W / 2 + offset,
+		y = offset,
+		resizable = true,
+		maintainAspectRatio = true,
+		resizingFunction = function( self, w, h )
+			resizeCamera( self, w, h )
+			local W, H = love.graphics.getDimensions()
+			self.x = W / 2 + offset
+			self.y = offset
+		end,
+		getContainerDimensions = function()
+			local W, H = love.graphics.getDimensions()
+			return W / 2 - 2 * offset, H - 2 * offset
+		end
+	} )
 
 local squares = {}
 local function newSquare( x, y, w, h )
 	table.insert( squares, {
-		x = x - w / 2, y = y - h / 2,
-		w = w, h = h,
-		draw = function( self )
-			love.graphics.rectangle( 'fill', self.x, self.y, self.w, self.h )
-		end,
-	} )
+			x = x - w / 2, y = y - h / 2,
+			w = w, h = h,
+			draw = function( self )
+				love.graphics.rectangle( 'fill', self.x, self.y, self.w, self.h )
+			end,
+		} )
 end
 
 local function drawSquares()
@@ -83,12 +92,12 @@ function love.update( dt )
 	if love.mouse.isDown( 1 ) then
 		local x, y = love.mouse.getPosition()
 		if  x > mobileCam.x and x < mobileCam.x + mobileCam.w
-		and y > mobileCam.y and y < mobileCam.y + mobileCam.h then
+			and y > mobileCam.y and y < mobileCam.y + mobileCam.h then
 			local newX, newY = mobileCam:getWorldCoordinates( x, y )
 			newSquare( newX, newY, offset / mobileCam.scale, offset / mobileCam.scale )
 		end
 		if  x > overviewCam.x and x < overviewCam.x + overviewCam.w
-		and y > overviewCam.y and y < overviewCam.y + overviewCam.h then
+			and y > overviewCam.y and y < overviewCam.y + overviewCam.h then
 			local newX, newY = overviewCam:getWorldCoordinates( x, y )
 			newSquare( newX, newY, offset / mobileCam.scale, offset / mobileCam.scale )
 		end
@@ -105,28 +114,28 @@ function love.draw()
 	-- Keep squares from bleeding
 	love.graphics.stencil( function() drawCameraBounds( mobileCam, 'fill' ) end, 'replace', 1 )
 	love.graphics.setStencilTest( 'greater', 0 )
-	mobileCam:push()
-		far:push()
+	mobileCam:push() do
+		far:push() do
 			love.graphics.setColor( 255, 0, 0, 25 )
 			drawSquares()
-		far:pop()
+		end far:pop()
 
 		love.graphics.setColor( 0, 255, 0, 255 )
 		drawSquares()
 
 		-- Either method is acceptable
-		mobileCam:push( 'close' )
+		mobileCam:push( 'close' ) do
 			love.graphics.setColor( 0, 0, 255, 25 )
 			drawSquares()
-		mobileCam:pop( 'close' )
-	mobileCam:pop()
+		end mobileCam:pop( 'close' )
+	end mobileCam:pop()
 
 	love.graphics.setColor( 255, 255, 255 )
 	love.graphics.stencil( function() drawCameraBounds( overviewCam, 'fill' ) end, 'replace', 1 )
 	love.graphics.setStencilTest( 'greater', 0 )
-	overviewCam:push()
+	overviewCam:push() do
 		drawSquares()
-	overviewCam:pop()
+	end overviewCam:pop()
 
 	love.graphics.setStencilTest()
 end

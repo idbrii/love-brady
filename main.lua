@@ -3,9 +3,12 @@
 
 local Camera = require('camera')
 
-local camera
+local mobileCam, overviewCam
+local layer = {}
+
 local world_dimensions = {1600,1200}
 local has_gravity = false
+local show_world = true
 
 local player = {
     x = world_dimensions[1] * 0.5,
@@ -40,8 +43,78 @@ local function translate(x,y)
     player.y = clamp(player.y + y, half_width, world_dimensions[2] - half_width)
 end
 
+local offset = 32
+local W, H = love.graphics.getDimensions()
+
+local function resizeCamera( self, w, h )
+	local scaleW, scaleH = w / self.w, h / self.h
+	local scale = math.min( scaleW, scaleH )
+	self.w, self.h = scale * self.w, scale * self.h
+	self.aspectRatio = self.w / w
+	self.offsetX, self.offsetY = self.w / 2, self.h / 2
+	offset = offset * scale
+end
+
+local function drawCameraBounds( cam, mode )
+	love.graphics.rectangle( mode, cam.x, cam.y, cam.w, cam.h )
+end
+
+local squares = {}
+local function newSquare( x, y, w, h )
+	table.insert( squares, {
+			x = x - w / 2, y = y - h / 2,
+			w = w, h = h,
+			draw = function( self )
+				love.graphics.rectangle( 'fill', self.x, self.y, self.w, self.h )
+			end,
+		} )
+end
+
+local function drawSquares()
+	for _, square in ipairs( squares ) do square:draw() end
+end
+
 function love.load()
-	camera = Camera(400, 300, { x = 32, y = 32, resizable = true, maintainAspectRatio = true })
+    mobileCam = Camera( W / 2 - 2 * offset, H - 2 * offset, {
+            x = offset,
+            y = offset,
+            resizable = true,
+            maintainAspectRatio = true,
+            resizingFunction = function( self, w, h )
+                resizeCamera( self, w, h )
+                --~ local W, H = love.graphics.getDimensions()
+                self.x = offset
+                self.y = offset
+            end,
+            getContainerDimensions = function()
+                --~ local W, H = love.graphics.getDimensions()
+                return W / 2 - 2 * offset, H - 2 * offset
+            end,
+        } )
+
+    -- Moves at the same speed as the main layer
+    layer.close = mobileCam:addLayer( 'close', 2, { relativeScale = .5 } )
+    layer.far = mobileCam:addLayer( 'far', .5 )
+
+    overviewCam = Camera( W / 2 - 2 * offset,
+        H - 2 * offset,
+        { x = W / 2 + offset,
+            y = offset,
+            resizable = true,
+            maintainAspectRatio = true,
+            resizingFunction = function( self, w, h )
+                resizeCamera( self, w, h )
+                local W, H = love.graphics.getDimensions()
+                self.x = W / 2 + offset
+                self.y = offset
+            end,
+            getContainerDimensions = function()
+                local W, H = love.graphics.getDimensions()
+                return W / 2 - 2 * offset, H - 2 * offset
+            end
+        } )
+    -- Start at player position.
+    overviewCam:setTranslation(player.x, player.y)
 end
 
 function love.keyreleased(key)
@@ -54,23 +127,38 @@ function love.keyreleased(key)
         else
             player.velocity.y = 0
         end
+    elseif key == 'j' then
+        -- Allow disabling the "world" to showcase the previous parallax demo.
+        show_world = not show_world
     elseif key == 'n' then
-        camera:setScale(loop(camera.scale + 1, 4))
+        mobileCam:setScale(loop(mobileCam.scale + 1, 4))
     elseif key == 'm' then
-        camera:scaleBy(0.5)
+        mobileCam:scaleBy(0.5)
+	elseif key == 'k' then squares = {}
+	elseif key == 'o' then
+		mobileCam:setTranslation( 0, 0 )
+		mobileCam:setRotation( 0, 0 )
+		mobileCam:setScale( 1 )
+	elseif key == 'r' then
+		love.keyreleased( 'o' )
+		love.keyreleased( 'c' )
     end
 end
 
+function love.wheelmoved( dx, dy )
+	mobileCam:scaleToPoint( 1 + dy / 10 )
+end
+
 function love.update(dt)
-    local moveSpeed = 300
+	local moveSpeed = 300 / mobileCam.scale
     local tau = math.pi * 2
     local rotateSpeed = tau * 0.05
     
     if love.keyboard.isDown('a') then translate(-moveSpeed * dt, 0) end
     if love.keyboard.isDown('d') then translate(moveSpeed * dt, 0) end
 
-    if love.keyboard.isDown('x') then camera:increaseRotation(0 - rotateSpeed * dt) end
-    if love.keyboard.isDown('c') then camera:increaseRotation(0 + rotateSpeed * dt) end
+    if love.keyboard.isDown('x') then mobileCam:increaseRotation(0 - rotateSpeed * dt) end
+    if love.keyboard.isDown('c') then mobileCam:increaseRotation(0 + rotateSpeed * dt) end
 
     if has_gravity then
         -- See https://love2d.org/wiki/Tutorial:Baseline_2D_Platformer
@@ -94,18 +182,34 @@ function love.update(dt)
         if love.keyboard.isDown('s') then translate(0, moveSpeed * dt) end
     end
 
+	if love.mouse.isDown( 1 ) then
+		local x, y = love.mouse.getPosition()
+		if  x > mobileCam.x and x < mobileCam.x + mobileCam.w
+			and y > mobileCam.y and y < mobileCam.y + mobileCam.h then
+			local newX, newY = mobileCam:getWorldCoordinates( x, y )
+			newSquare( newX, newY, offset / mobileCam.scale, offset / mobileCam.scale )
+		end
+		if  x > overviewCam.x and x < overviewCam.x + overviewCam.w
+			and y > overviewCam.y and y < overviewCam.y + overviewCam.h then
+			local newX, newY = overviewCam:getWorldCoordinates( x, y )
+			newSquare( newX, newY, offset / mobileCam.scale, offset / mobileCam.scale )
+		end
+	end
+
+
     -- Chase the mouse to demonstrate converting mouse to world
     -- coordinates.
-    local x,y = camera:getMouseWorldCoordinates()
+    local x,y = mobileCam:getMouseWorldCoordinates()
     chaser.x = lerp(chaser.x, x, 0.025)
     chaser.y = lerp(chaser.y, y, 0.025)
 
     -- ## Update the camera and the target position. ##
-    camera:update()
-    camera:setTranslation(player.x, player.y)
+    mobileCam:setTranslation(player.x, player.y)
+	mobileCam:update()
+	overviewCam:update()
 end
 
-local function draw_game()
+local function draw_game(cam)
     -- ## Draw the game here ##
     -- Draw world bounds.
     love.graphics.setColor(1, 1, 1, 1)
@@ -125,24 +229,55 @@ local function draw_game()
     end
     -- Draw mouse position
     love.graphics.setColor(1, 1, 0, 1)
-    local x,y = camera:getMouseWorldCoordinates()
+    local x,y = cam:getMouseWorldCoordinates()
     love.graphics.circle('fill', x,y, 7,7)
     love.graphics.setColor(0.5, 1, 0, 1)
     love.graphics.circle('fill', chaser.x,chaser.y, 7,7)
 end
 
 function love.draw()
-    love.graphics.clear()
-    camera:push() do
+	drawCameraBounds( mobileCam, 'line' )
+	drawCameraBounds( overviewCam, 'line' )
+
+	-- Keep squares from bleeding
+	love.graphics.stencil( function() drawCameraBounds( mobileCam, 'fill' ) end, 'replace', 1 )
+	love.graphics.setStencilTest( 'greater', 0 )
+	mobileCam:push() do
+		layer.far:push() do
+			love.graphics.setColor( 255, 0, 0, 25 )
+			drawSquares()
+		end layer.far:pop()
+
+		love.graphics.setColor( 0, 255, 0, 255 )
+		drawSquares()
         -- ## Draw the game here ##
-        draw_game()
-    end camera:pop()
+        if show_world then
+            draw_game(mobileCam)
+        end
+
+		-- Either method is acceptable
+		mobileCam:push( 'close' ) do
+			love.graphics.setColor( 0, 0, 255, 25 )
+			drawSquares()
+		end mobileCam:pop( 'close' )
+	end mobileCam:pop()
+
+	love.graphics.setColor(255,255,255)
+    local x,y = mobileCam:getScreenCoordinates(world_dimensions[1]/2,world_dimensions[2]/2)
+    love.graphics.circle("line", x,y, 5,5)
+    love.graphics.printf("World Center", x,y, 100, 'center')
+
+	love.graphics.setColor(1,1,1,1)
+	love.graphics.stencil( function() drawCameraBounds( overviewCam, 'fill' ) end, 'replace', 1 )
+	love.graphics.setStencilTest( 'greater', 0 )
+	overviewCam:push() do
+		drawSquares()
+	end overviewCam:pop()
+
+	love.graphics.setStencilTest()
     
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Physics: " .. (has_gravity and "Platformer" or "TopDown"), 0,0, 1000)
-
-    local x,y = camera:getScreenCoordinates(world_dimensions[1]/2,world_dimensions[2]/2)
-    love.graphics.circle("line", x,y, 5,5)
-    love.graphics.printf("World Center", x,y, 100, 'center')
 end
 
+--~ require('parallax')

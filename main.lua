@@ -101,7 +101,7 @@ function love.load()
         } )
 
     -- Moves at the same speed as the main layer
-    layer.close = mobileCam:addLayer( 'close', 2, { relativeScale = .5 } )
+    layer.close = mobileCam:addLayer( 'close', 2, { relativeScale = .8 } )
     layer.far = mobileCam:addLayer( 'far', .5 )
 
     overviewCam = Camera( W / 2 - 2 * offset,
